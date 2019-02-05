@@ -21,20 +21,58 @@ def gru(units):
 
 
 class Encoder(tf.keras.Model):
-    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):
+    """
+    Simple encoder based on GRU
+    """
+    def __init__(self, config):
+        """
+        Initialize all variables
+        :param config: args
+        """
         super(Encoder, self).__init__()
-        self.batch_sz = batch_sz
-        self.enc_units = enc_units
-        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
-        self.gru = gru(self.enc_units)
+        self.batch_size = config['batch_size']
+        self.embedding_size = config['embedding_size']
+        self.vocab_size = config['vocab_size']
+        self.hidden_units = config['hidden_units']
+        self.embedding = tf.keras.layers.Embedding(self.vocab_size, self.embedding_size)
+        self.gru = gru(self.hidden_units)
     
-    def call(self, inputs, state):
+    def call(self, inputs, state=None):
+        """
+        Encode all texts to outputs and final state
+        :param inputs: shape: [batch_size, max_length, hidden_units]
+        :param state: shape: [batch_size, hidden_units]
+        :return:
+        """
         x = self.embedding(inputs)
+        state = state if state else self.zero_state
         output, state = self.gru(x, initial_state=state)
         return output, state
     
-    def initialize_hidden_state(self):
-        return tf.zeros((self.batch_sz, self.enc_units))
+    @property
+    def zero_state(self):
+        """
+        Get zero state
+        :return:
+        """
+        return tf.zeros((self.batch_size, self.hidden_units))
+
+
+if __name__ == '__main__':
+    config = {
+        'batch_size': 64,
+        'embedding_size': 300,
+        'vocab_size': 10000,
+        'hidden_units': 100,
+        'max_length': 25
+    }
+    encoder = Encoder(config)
+    print(encoder)
+    inputs = tf.random_normal(shape=[config['batch_size'], config['max_length']])
+    print('inputs', inputs)
+    output, state = encoder(inputs)
+    
+    print(output, state)
 
 
 class Decoder():
