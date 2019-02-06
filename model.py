@@ -1,5 +1,6 @@
 from model_zoo.model import BaseModel
 import tensorflow as tf
+import numpy as np
 
 
 def gru(units):
@@ -172,9 +173,47 @@ class Seq2SeqAttentionModel(BaseModel):
         super(Seq2SeqAttentionModel, self).__init__(config)
         self.encoder = Encoder(config)
         self.decoder = DecoderWithAttention(config)
+        self.shape(inputs_shape=[config['max_length']], output_shape=[config['vocab_size']])
     
-    def loss(self):
+    def loss(self, y_true, y_pred):
+        y_true = y_true[:, 1:]
+        mask = 1 - np.equal(y_true, 0)
+        loss_matrix = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred) * mask
+        loss_batch = tf.reduce_sum(loss_matrix, axis=-1)
+        loss = tf.reduce_mean(loss_batch)
+        print('Loss', loss)
+        return loss
     
+    def metric(self, y_true, y_pred):
+        y_true = y_true[:, 1:]
+        mask = 1 - np.equal(y_true, 0)
+        loss_matrix = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred) * mask
+        loss_batch = tf.reduce_sum(loss_matrix, axis=-1)
+        loss = tf.reduce_mean(loss_batch)
+        return loss
+    
+    def init(self):
+        self.compile(optimizer=self.optimizer(),
+                     loss='mse',
+                     metrics=[self.metric])
     
     def call(self, inputs, training=None, mask=None):
-    
+        print('Inputs', inputs)
+        sources, targets = inputs
+        print('sources', sources, 'targets', targets)
+        print('Training', training)
+        encoder_outputs, state = self.encoder(sources)
+        
+        if training:
+            decoder_outputs, decoder_states = [], []
+            for i in range(tf.shape(sources)[-1] - 1):
+                print('i', i, '*' * 20)
+                source = tf.expand_dims(sources[:, i], 1)
+                print('source', source)
+                outputs, state = self.decoder(source, state, encoder_outputs)
+                decoder_outputs.append(outputs)
+                decoder_states.append(state)
+            decoder_outputs = tf.stack(decoder_outputs, axis=1)
+            print('decoder_outputs', decoder_outputs)
+            return decoder_outputs
+            # dec_input = tf.expand_dims([5] * tf.shape(sources)[0], 1)
