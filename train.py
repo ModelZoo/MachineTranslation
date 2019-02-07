@@ -1,8 +1,6 @@
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
-
 from model_zoo.trainer import BaseTrainer
-from model_zoo.preprocess import standardize
 import pickle
 from os.path import join
 

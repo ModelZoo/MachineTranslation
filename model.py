@@ -59,7 +59,7 @@ class Encoder(tf.keras.Model):
         return tf.zeros((self.batch_size, self.hidden_units))
 
 
-class Decoder():
+class Decoder(tf.keras.Model):
     
     def __init__(self, config):
         """
@@ -72,17 +72,23 @@ class Decoder():
         self.vocab_size = config['vocab_size']
         self.hidden_units = config['hidden_units']
         self.embedding = tf.keras.layers.Embedding(self.vocab_size, self.embedding_size)
-        
+        # gru
         self.gru = gru(self.hidden_units)
         
         # dense for vocab transform
         self.dense = tf.keras.layers.Dense(self.vocab_size)
     
-    def call(self, inputs):
+    def call(self, inputs, state):
+        """
+        Define base decoder for seq2seq model.
+        :param inputs:
+        :param state:
+        :return:
+        """
         # inputs: [batch_size, 1, embedding_size]
         inputs = self.embedding(inputs)
         # state: [batch_size, hidden_units]
-        outputs, state = self.gru(inputs)
+        outputs, state = self.gru(inputs, initial_state=state)
         # outputs: [batch_size, hidden_units]
         outputs = self.dense(tf.reshape(outputs, [-1, outputs.shape[-1]]))
         return outputs, state
@@ -103,7 +109,7 @@ class DecoderWithAttention(tf.keras.Model):
     
     def __init__(self, config):
         """
-        Initialize all variables
+        Initialize all variables.
         :param config: args
         """
         super(DecoderWithAttention, self).__init__()
@@ -123,7 +129,7 @@ class DecoderWithAttention(tf.keras.Model):
     
     def call(self, inputs, state, encoder_outputs):
         """
-        Process decoder step with attention mechanism
+        Process decoder step with attention mechanism.
         :param inputs:
         :param state:
         :param encoder_outputs:
@@ -139,9 +145,9 @@ class DecoderWithAttention(tf.keras.Model):
         inputs = self.embedding(inputs)
         # inputs: [batch_size, 1, embedding_size + hidden_units]
         inputs = tf.concat([tf.expand_dims(c_i, 1), inputs], axis=-1)
-        # output: [batch_size, 1, hidden_units]
+        # outputs: [batch_size, 1, hidden_units]
         # state: [batch_size, hidden_units]
-        outputs, state = self.gru(inputs)
+        outputs, state = self.gru(inputs, initial_state=state)
         # outputs: [batch_size, hidden_units]
         outputs = self.dense(tf.reshape(outputs, [-1, outputs.shape[-1]]))
         return outputs, state
@@ -158,33 +164,44 @@ class DecoderWithAttention(tf.keras.Model):
 class Seq2SeqModel(BaseModel):
     
     def __init__(self, config):
+        """
+        Init base encoder and decoder.
+        :param config:
+        """
         super(Seq2SeqModel, self).__init__(config)
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-    
-    def call(self, inputs, training=None, mask=None):
-        o = self.dense(inputs)
-        return o
-
-
-class Seq2SeqAttentionModel(BaseModel):
-    
-    def __init__(self, config):
-        super(Seq2SeqAttentionModel, self).__init__(config)
         self.encoder = Encoder(config)
-        self.decoder = DecoderWithAttention(config)
-        self.shape(inputs_shape=[config['max_length']], output_shape=[config['vocab_size']])
+        self.decoder = Decoder(config)
+    
+    def init(self):
+        """
+        Init model.
+        :return:
+        """
+        self.compile(optimizer=self.optimizer(),
+                     loss=self.loss,
+                     metrics=[self.metric])
     
     def loss(self, y_true, y_pred):
+        """
+        Define loss function.
+        :param y_true: label
+        :param y_pred: logits
+        :return:
+        """
         y_true = y_true[:, 1:]
         mask = 1 - np.equal(y_true, 0)
         loss_matrix = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred) * mask
         loss_batch = tf.reduce_sum(loss_matrix, axis=-1)
         loss = tf.reduce_mean(loss_batch)
-        print('Loss', loss)
         return loss
     
     def metric(self, y_true, y_pred):
+        """
+        Define metric for loss.
+        :param y_true:
+        :param y_pred:
+        :return:
+        """
         y_true = y_true[:, 1:]
         mask = 1 - np.equal(y_true, 0)
         loss_matrix = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred) * mask
@@ -192,28 +209,58 @@ class Seq2SeqAttentionModel(BaseModel):
         loss = tf.reduce_mean(loss_batch)
         return loss
     
-    def init(self):
-        self.compile(optimizer=self.optimizer(),
-                     loss='mse',
-                     metrics=[self.metric])
-    
     def call(self, inputs, training=None, mask=None):
-        print('Inputs', inputs)
+        """
+        Run seq2seq model
+        :param inputs:
+        :param training:
+        :param mask:
+        :return:
+        """
         sources, targets = inputs
-        print('sources', sources, 'targets', targets)
-        print('Training', training)
         encoder_outputs, state = self.encoder(sources)
         
         if training:
             decoder_outputs, decoder_states = [], []
             for i in range(tf.shape(sources)[-1] - 1):
-                print('i', i, '*' * 20)
                 source = tf.expand_dims(sources[:, i], 1)
-                print('source', source)
+                outputs, state = self.decoder(source, state)
+                decoder_outputs.append(outputs)
+                decoder_states.append(state)
+            decoder_outputs = tf.stack(decoder_outputs, axis=1)
+            return decoder_outputs
+
+
+class Seq2SeqAttentionModel(Seq2SeqModel):
+    
+    def __init__(self, config):
+        """
+        Init encoder and attention-decoder, define input and output shape.
+        :param config:
+        """
+        super(Seq2SeqAttentionModel, self).__init__(config)
+        self.encoder = Encoder(config)
+        self.decoder = DecoderWithAttention(config)
+        self.shape(inputs_shape=[config['max_length']], output_shape=[config['vocab_size']])
+    
+    def call(self, inputs, training=None, mask=None):
+        """
+        Run seq2seq attention model.
+        :param inputs:
+        :param training:
+        :param mask:
+        :return:
+        """
+        sources, targets = inputs
+        encoder_outputs, state = self.encoder(sources)
+        
+        if training:
+            # define decode process
+            decoder_outputs, decoder_states = [], []
+            for i in range(tf.shape(sources)[-1] - 1):
+                source = tf.expand_dims(sources[:, i], 1)
                 outputs, state = self.decoder(source, state, encoder_outputs)
                 decoder_outputs.append(outputs)
                 decoder_states.append(state)
             decoder_outputs = tf.stack(decoder_outputs, axis=1)
-            print('decoder_outputs', decoder_outputs)
             return decoder_outputs
-            # dec_input = tf.expand_dims([5] * tf.shape(sources)[0], 1)
