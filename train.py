@@ -4,7 +4,7 @@ from model_zoo.trainer import BaseTrainer
 from os.path import join
 import pickle
 
-tf.flags.DEFINE_integer('epochs', 20, 'Max epochs')
+tf.flags.DEFINE_integer('epochs', 200, 'Max epochs')
 tf.flags.DEFINE_integer('embedding_size', 300, 'Embedding size')
 tf.flags.DEFINE_integer('batch_size', 16, 'Batch size')
 tf.flags.DEFINE_integer('vocab_size', 10000, 'Vocabulary size')
