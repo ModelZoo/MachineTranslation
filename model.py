@@ -13,12 +13,14 @@ def gru(units):
         return tf.keras.layers.CuDNNGRU(units,
                                         return_sequences=True,
                                         return_state=True,
-                                        recurrent_initializer='glorot_uniform')
+                                        recurrent_initializer='glorot_uniform',
+                                        bias_initializer='random_uniform')
     return tf.keras.layers.GRU(units,
                                return_sequences=True,
                                return_state=True,
                                recurrent_activation='sigmoid',
-                               recurrent_initializer='glorot_uniform')
+                               recurrent_initializer='glorot_uniform',
+                               bias_initializer='random_uniform')
 
 
 class Encoder(tf.keras.Model):
@@ -67,7 +69,7 @@ class Decoder(tf.keras.Model):
         self.gru = gru(self.hidden_units)
         
         # dense for vocab transform
-        self.dense = tf.keras.layers.Dense(self.vocab_size)
+        self.dense = tf.keras.layers.Dense(self.vocab_size, bias_initializer='random_uniform')
     
     def call(self, inputs, state):
         """
@@ -156,6 +158,7 @@ class Seq2SeqModel(BaseModel):
     """
     Only Seq2Seq model.
     """
+    
     def __init__(self, config):
         """
         Init base encoder and decoder.
@@ -232,6 +235,7 @@ class Seq2SeqAttentionModel(Seq2SeqModel):
     """
     Seq2Seq model with attention.
     """
+    
     def __init__(self, config):
         """
         Init encoder and attention-decoder, define input and output shape.
