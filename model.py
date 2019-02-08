@@ -81,19 +81,11 @@ class Decoder(tf.keras.Model):
         # inputs: [batch_size, 1, embedding_size]
         inputs = self.embedding(inputs)
         # state: [batch_size, hidden_units]
-        outputs, state = self.gru(inputs)
+        outputs, state = self.gru(inputs, initial_state=state)
         # outputs: [batch_size, hidden_units]
         outputs = self.dense(tf.reshape(outputs, [-1, outputs.shape[-1]]))
         return outputs, state
     
-    @property
-    def zero_state(self):
-        """
-        Get zero state
-        :return:
-        """
-        return tf.zeros((self.batch_size, self.hidden_units))
-
 
 class DecoderWithAttention(tf.keras.Model):
     """
