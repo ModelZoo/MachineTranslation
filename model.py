@@ -85,7 +85,7 @@ class Decoder(tf.keras.Model):
         # outputs: [batch_size, hidden_units]
         outputs = self.dense(tf.reshape(outputs, [-1, outputs.shape[-1]]))
         return outputs, state
-    
+
 
 class DecoderWithAttention(tf.keras.Model):
     """
@@ -168,7 +168,7 @@ class Seq2SeqModel(BaseModel):
         """
         self.compile(optimizer=self.optimizer(),
                      loss=self.loss,
-                     metrics=[self.metric])
+                     metrics=[self.precision, self.top])
     
     def loss(self, y_true, y_pred):
         """
@@ -184,23 +184,36 @@ class Seq2SeqModel(BaseModel):
         loss = tf.reduce_mean(loss_batch)
         return loss
     
-    def metric(self, y_true, y_pred):
+    def precision(self, y_true, y_pred):
         """
-        Define metric for loss.
+        Calculate precision of sequence.
         :param y_true:
         :param y_pred:
         :return:
         """
         y_true = y_true[:, 1:]
         mask = 1 - np.equal(y_true, 0)
-        loss_matrix = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred) * mask
-        loss_batch = tf.reduce_sum(loss_matrix, axis=-1)
-        loss = tf.reduce_mean(loss_batch)
-        return loss
+        y_pred = tf.argmax(y_pred, axis=-1)
+        equal = tf.cast(np.equal(y_true, y_pred), tf.float32) * mask
+        precision = tf.reduce_sum(equal) / tf.cast(tf.reduce_sum(mask), tf.float32)
+        return precision
+    
+    def top(self, y_true, y_pred):
+        """
+        Calculate precision of first sequence.
+        :param y_true:
+        :param y_pred:
+        :return:
+        """
+        y_true = y_true[:, 1:]
+        y_pred = tf.argmax(y_pred, axis=-1)
+        equal = tf.cast(np.equal(y_true[:, 1], y_pred[:, 1]), tf.float32)
+        top = tf.reduce_mean(equal)
+        return top
     
     def call(self, inputs, training=None, mask=None):
         """
-        Run seq2seq model
+        Run seq2seq model.
         :param inputs:
         :param training:
         :param mask:
@@ -247,14 +260,23 @@ class Seq2SeqAttentionModel(Seq2SeqModel):
         """
         sources, targets = inputs
         encoder_outputs, state = self.encoder(sources)
-        
         if training:
             # define decode process
             decoder_outputs, decoder_states = [], []
             for i in range(tf.shape(sources)[-1] - 1):
-                source = tf.expand_dims(sources[:, i], 1)
+                source = tf.expand_dims(sources[:, i], axis=1)
                 outputs, state = self.decoder(source, state, encoder_outputs)
                 decoder_outputs.append(outputs)
                 decoder_states.append(state)
-            decoder_outputs = tf.stack(decoder_outputs, axis=1)
-            return decoder_outputs
+        else:
+            # eval and predict
+            decoder_outputs, decoder_states = [], []
+            inputs = tf.expand_dims(sources[:, 0], 1)
+            for i in range(tf.shape(sources)[-1] - 1):
+                outputs, state = self.decoder(inputs, state, encoder_outputs)
+                # use decoded result
+                inputs = tf.expand_dims(tf.argmax(outputs, axis=-1), axis=1)
+                decoder_outputs.append(outputs)
+                decoder_states.append(state)
+        decoder_outputs = tf.stack(decoder_outputs, axis=1)
+        return decoder_outputs
