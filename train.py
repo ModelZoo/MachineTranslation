@@ -22,9 +22,8 @@ class Trainer(BaseTrainer):
     def prepare_data(self):
         sources = pickle.load(open(join(self.flags.datasets_dir, self.flags.dataset, 'sources.pkl'), 'rb'))
         targets = pickle.load(open(join(self.flags.datasets_dir, self.flags.dataset, 'targets.pkl'), 'rb'))
-        sources_train, sources_eval, targets_train, targets_eval = train_test_split(sources, targets, test_size=0.005)
-        # return ([sources_train, targets_train], targets_train), ((sources_eval, targets_eval), targets_eval)
-        return ([sources_eval, targets_eval], targets_eval), ((sources_eval, targets_eval), targets_eval)
+        sources_train, sources_eval, targets_train, targets_eval = train_test_split(sources, targets, test_size=0.1)
+        return ([sources_train, targets_train], targets_train), ((sources_eval, targets_eval), targets_eval)
 
 
 if __name__ == '__main__':
