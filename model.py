@@ -47,16 +47,7 @@ class Encoder(tf.keras.Model):
         :return:
         """
         inputs = self.embedding(inputs)
-        state = state if state else self.zero_state
-        return self.gru(inputs, initial_state=state)
-    
-    @property
-    def zero_state(self):
-        """
-        Get zero state
-        :return:
-        """
-        return tf.zeros((self.batch_size, self.hidden_units))
+        return self.gru(inputs)
 
 
 class Decoder(tf.keras.Model):
@@ -88,7 +79,7 @@ class Decoder(tf.keras.Model):
         # inputs: [batch_size, 1, embedding_size]
         inputs = self.embedding(inputs)
         # state: [batch_size, hidden_units]
-        outputs, state = self.gru(inputs, initial_state=state)
+        outputs, state = self.gru(inputs)
         # outputs: [batch_size, hidden_units]
         outputs = self.dense(tf.reshape(outputs, [-1, outputs.shape[-1]]))
         return outputs, state
@@ -162,7 +153,9 @@ class DecoderWithAttention(tf.keras.Model):
 
 
 class Seq2SeqModel(BaseModel):
-    
+    """
+    Only Seq2Seq model.
+    """
     def __init__(self, config):
         """
         Init base encoder and decoder.
@@ -171,6 +164,7 @@ class Seq2SeqModel(BaseModel):
         super(Seq2SeqModel, self).__init__(config)
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
+        # self.shape(inputs_shape=[config['max_length']], output_shape=[config['vocab_size']])
     
     def init(self):
         """
@@ -229,10 +223,15 @@ class Seq2SeqModel(BaseModel):
                 decoder_states.append(state)
             decoder_outputs = tf.stack(decoder_outputs, axis=1)
             return decoder_outputs
+    
+    def optimizer(self):
+        return tf.train.AdamOptimizer(self.config.get('learning_rate'))
 
 
 class Seq2SeqAttentionModel(Seq2SeqModel):
-    
+    """
+    Seq2Seq model with attention.
+    """
     def __init__(self, config):
         """
         Init encoder and attention-decoder, define input and output shape.
@@ -241,7 +240,6 @@ class Seq2SeqAttentionModel(Seq2SeqModel):
         super(Seq2SeqAttentionModel, self).__init__(config)
         self.encoder = Encoder(config)
         self.decoder = DecoderWithAttention(config)
-        self.shape(inputs_shape=[config['max_length']], output_shape=[config['vocab_size']])
     
     def call(self, inputs, training=None, mask=None):
         """
