@@ -15,6 +15,7 @@ tf.flags.DEFINE_string('model_class', 'Seq2SeqAttentionModel', 'Model class name
 tf.flags.DEFINE_string('datasets_dir', './datasets', help='Data dir')
 tf.flags.DEFINE_string('dataset', 'es2en', help='Data dir')
 tf.flags.DEFINE_bool('multiple_inputs', True, 'Multiple inputs')
+tf.flags.DEFINE_string('checkpoint_dir', 'checkpoints/es2en', help='Data source dir')
 
 
 class Trainer(BaseTrainer):
