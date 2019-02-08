@@ -229,8 +229,18 @@ class Seq2SeqModel(BaseModel):
                 outputs, state = self.decoder(source, state)
                 decoder_outputs.append(outputs)
                 decoder_states.append(state)
-            decoder_outputs = tf.stack(decoder_outputs, axis=1)
-            return decoder_outputs
+        else:
+            # eval and predict
+            decoder_outputs, decoder_states = [], []
+            inputs = tf.expand_dims(sources[:, 0], 1)
+            for i in range(tf.shape(sources)[-1] - 1):
+                outputs, state = self.decoder(inputs, state)
+                # use decoded result
+                inputs = tf.expand_dims(tf.argmax(outputs, axis=-1), axis=1)
+                decoder_outputs.append(outputs)
+                decoder_states.append(state)
+        decoder_outputs = tf.stack(decoder_outputs, axis=1)
+        return decoder_outputs
     
     def optimizer(self):
         return tf.train.AdamOptimizer(self.config.get('learning_rate'))
